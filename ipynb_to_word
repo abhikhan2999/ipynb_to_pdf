@@ -1,0 +1,158 @@
+!pip install docx
+!pip install docx2txt
+!pip install nbconvert
+!pip install beautifulsoup4
+!pip install pillow
+!pip install python-docx --upgrade
+
+
+import nbformat
+from nbconvert import HTMLExporter
+from bs4 import BeautifulSoup
+from docx import Document
+from docx.shared import Pt, Inches  # Import Pt and Inches units
+import base64
+import os
+from PIL import Image
+
+
+
+
+# Load the IPython Notebook file
+input_notebook_path = "file_path"
+
+
+
+
+# Create an HTML exporter
+html_exporter = HTMLExporter()
+
+
+
+
+# Load the notebook
+with open(input_notebook_path, "r", encoding="utf-8") as notebook_file:
+    notebook_content = nbformat.read(notebook_file, as_version=4)
+
+
+
+
+# Convert the notebook to HTML
+(html_output, resources) = html_exporter.from_notebook_node(notebook_content)
+
+
+
+
+# Create a new Word document
+doc = Document()
+doc.add_heading('IPython Notebook to Word', 0)
+
+
+
+
+# Create a directory to save images
+image_dir = "notebook_images"
+os.makedirs(image_dir, exist_ok=True)
+
+
+
+
+# Parse the HTML and add code cells, text, headings, and images to the Word document
+soup = BeautifulSoup(html_output, 'html.parser')
+
+
+
+
+for tag in soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'ul', 'ol', 'img', 'pre']):
+    if tag.name == 'img':
+        # Extract image data
+        img_data = tag.get('src', '').split(',')[1]
+        img_data = base64.b64decode(img_data)
+
+
+
+
+        # Save the image to a file
+        image_path = os.path.join(image_dir, f"image_{len(os.listdir(image_dir)) + 1}.png")
+        with open(image_path, "wb") as image_file:
+            image_file.write(img_data)
+
+
+
+
+        # Open and resize the image using PIL
+        img = Image.open(image_path)
+        img_width, img_height = img.size
+        max_img_width = Inches(5.6)  # Adjust the maximum width as needed
+
+
+
+
+        if img_width > max_img_width:
+            new_height = (max_img_width / img_width) * img_height
+            img = img.resize((int(max_img_width), int(new_height)))
+
+
+
+
+        # Save the resized image
+        img.save(image_path)
+
+
+
+
+        # Add the image to the Word document
+        doc.add_picture(image_path, width=Inches(5.6), height=Inches(3.66))  # Set the image size
+
+
+
+
+    elif tag.name == 'pre':
+        # Extract code cells and format them as code blocks
+        code_text = tag.get_text()
+        p = doc.add_paragraph(code_text)
+        run = p.runs[0]
+
+
+
+
+        # Set the font size and style for code cells
+        run.font.size = Pt(10)  # Set font size
+        run.font.name = 'Courier New'
+
+
+
+
+    else:
+        # Handle other HTML elements as text or headings
+        text = tag.get_text()
+        style = None
+
+
+
+
+        if tag.name == 'h1':
+            style = 'Title'
+        elif tag.name in ['h2', 'h3', 'h4', 'h5', 'h6']:
+            style = 'Heading' + tag.name[-1]
+
+
+
+
+        if style:
+            doc.add_heading(text, level=int(tag.name[-1]))
+        else:
+            doc.add_paragraph(text)
+
+
+
+
+# Save the Word document
+output_word_file = "mydocfinal.docx"
+doc.save(output_word_file)
+
+
+
+
+print(f"IPython Notebook with code and images converted to Word: {output_word_file}")
+
